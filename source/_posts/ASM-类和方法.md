@@ -200,6 +200,40 @@ public void visitLocalVariable(
 
 Label是可以先声明，先使用，后定位的。我们可以先定义一个Label，然后正常的使用它，最后调用visitLabel来确定该Label对应的位置即可。之前所有使用该Label的位置都会被替换为最后具体的位置。
 
+## 方法的调用
+
+ASM提供了MethodVisitor.visitMethodInsn方法来实现方法的调用，首先来看方法声明：
+
+```
+public void visitMethodInsn(
+    final int opcode,   // 调用方式
+    final String owner, // 方法所有类
+    final String name,  // 方法名称
+    final String descriptor, // 方法出入参描述
+    final boolean isInterface) // 方法所有者是否是接口
+```
+
+opcode放在最后，先看其它的参数：
+- owner与name：仅仅一个方法名并不能定位一个方法，一个完整的方法形如：`java/lang/Object.toString`，就是一个owner.name的形式
+- descriptor：可以详见上一节中声明一个方法时传入的入参、返回值类型描述，通常形如`()Ljava/lang/String;`。
+- isInterface：owner是否是一个接口。
+
+然后我们来看opcode，在JVM字节码中提供了五种调用方法的opcode：
+
+- invokespecial: 调用构造方法、私有方法或父类方法
+- invokestatic: 调用静态方法
+- invokevirtual: 调用实例方法
+- invokeinterface: 调用接口方法
+- invokedynamic: 动态推断方法；
+
+前面四种方法看文本描述都可以清晰地知道是在什么情况下使用。invokedynamic则是JVM指令集中最令人困惑的一个。
+
+invokedynamic是在Java8中才加入的新特性，是JVM对于更加动态的类型的一种支持，用于降低反射编程带来的开销。我们在Java8中用到的很多新的语法特性都得益于invokedynamic指令，诸如lambda表达式等。该指令最终仍旧会执行invokevirtual/invokeinterface指令。只不过推迟到运行时再进行具体的推断。
+
+鉴于该指令的复杂性，在本教程中不进行介绍和使用，我们也不会有用字节码写lambda表达式之类的需求吧……不会吧不会吧……
+
+关于各种调用方法的更详细的案例描述可以可以参见[这篇博客](https://www.infoq.cn/article/Invokedynamic-Javas-secret-weapon)。
+
 ## 小结
 
 本章基本完整的介绍了如何去实现一个类。在生产中直接使用ASM框架是很麻烦的一件事，会让你的代码乱成一团。编写一个类的时候，对ClassVisitor/MethodVisitor进行进一步的抽象封装，维护一个自己的上下文信息容器，可以帮助你更好的实现更复杂的功能。
