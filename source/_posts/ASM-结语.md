@@ -1,7 +1,10 @@
 ---
 title: (ASM) 结语
 date: 2020-10-23 11:53:09
-tags: ASM,Java
+categories: ASM实战
+tags: 
+  - ASM
+  - Java
 ---
 
 关于ASM和字节码的简单实战教程到此就告一段落。按照计划后续应该还有一个项目实战的教程，欢迎大家收藏关注。

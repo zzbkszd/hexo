@@ -1,7 +1,10 @@
 ---
 title: (ASM) 三、数据类型和操作指令
 date: 2020-10-20 11:53:09
-tags: ASM,Java
+categories: ASM实战
+tags: 
+  - ASM
+  - Java
 ---
 
 ## 数据类型

@@ -1,7 +1,10 @@
 ---
 title: (ASM) 二、简单的Hello World实现
 date: 2020-10-19 12:00:00
-tags: ASM,Java
+categories: ASM实战
+tags: 
+  - ASM
+  - Java
 ---
 
 ## ASM 简介
