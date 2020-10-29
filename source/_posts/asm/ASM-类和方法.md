@@ -32,6 +32,8 @@ public class com.nature.dql.SuperMaper extends java.util.HashMap<java.lang.Strin
 
 使用ASM框架来创建这个类，代码如下：
 
+<!-- more -->
+
 ```
 ClassWriter cw = new ClassWriter(0);
 cw.visit(Opcodes.V1_8, ACC_PUBLIC + ACC_SUPER, "com/nature/dql/SuperMaper", 

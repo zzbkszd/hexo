@@ -46,6 +46,7 @@ select e.* from
 	salaries s  
 where e.emp_no = s.emp_no group by e.emp_no order by max(s.salary) DESC limit 10;
 ```
+<!-- more -->
 
 ## 子查询
 
