@@ -1,6 +1,6 @@
 ---
 title: (Mysql) 一、查询基础
-date: 2020-10-26 11:53:09
+date: 2020-10-28 11:53:09
 categories: Mysql
 tags: 
   - MYSQL
@@ -68,7 +68,7 @@ select * from employees e where e.emp_no in
 	as sub );
 ```
 
-tip: `在mysql5.7中，不支持使用limit语句的in/all/any/some子查询，所以需要进行一个嵌套的子查询以绕过该问题，因为嵌套的查询内使用子查询但是没有在in条件中，嵌套外的子查询用于in条件但是没有limit`
+tip: `在mysql5.7中，不支持使用limit语句的in/all/any/some子查询，所以需要进行一个嵌套的子查询以绕过该问题，因为嵌套内的查询使用子查询但是没有在in条件中，嵌套外的子查询用于in条件但是没有limit`
 
 该查询得到的结果如下：
 
@@ -114,7 +114,11 @@ where e.emp_no = s.emp_no order by s.salary DESC limit 10;
 ```
 在上述两个写法之外，还有等价的第三种写法：
 
-select * from employees e where e.emp_no in (select sub.emp_no from (select DISTINCT emp_no from salaries order by salary DESC limit 10) as sub );
+select * from employees e where e.emp_no in 
+	(select sub.emp_no from 
+		(select DISTINCT emp_no from salaries order by salary DESC limit 10)
+		as sub 
+	);
 
 在salaries.salary字段增加b-tree索引的情况下，三种SQL的执行速度如下：
 1: 1.2s
@@ -202,7 +206,7 @@ create view sub_employees as select * from employees where emp_no != 10003;
 
 这个视图中删除了`emp_no=10003`的员工。
 
-执行右连接查询：
+然后在两个视图上执行右连接查询：
 
 ```sql
 select e.emp_no, first_name, last_name, title from sub_employees e right join sub_titles t on e.emp_no = t.emp_no limit 5;
@@ -262,7 +266,36 @@ select count(*) from sub_titles;
 
 可以看到，对于`emp_no=10006`这一个雇员，会与`sub_titles`中的所有`title`列的值依次匹配，可以看到在结果中`emp_no=10006`的数据条数与`sub_titles`中的数据量相等。
 
-于是可以知道，`cross join`对于两个数据量为m和n的表，最终会产生m*n条数据。所以千万不要在没有加限制条件的前提下执行`cross join`查询，对于数据量较大的表会直接卡死好久好久……
+于是可以知道，`cross join`对于两个数据量为m和n的表，最终会产生m*n条数据。所以千万不要在没有加限制条件的前提下执行`cross join`查询，对于数据量较大的表会直接卡死好久好久。
+
+
+## 联合查询Union
+
+联合查询Union可以将多个select的结果聚合成一个结果，举例来说，查询所有出生日期在`1959-01-01`到`1960-06-30`和`1960-01-01`到`1963-01-01`两个区间的员工。
+
+首先我们可以写出两个简单查询的SQL：
+
+```sql
+select * from employees e where e.birth_date between '1959-01-01' and '1960-06-30';
+select * from employees e where e.birth_date between '1960-01-01' and '1963-01-01';
+```
+
+两个SQL查询得到的结果数量分别为34903和69261，总计为104164条数据，根据时间区间可以很容易知道两个结果集中有一部分员工信息是重复的。
+
+下面用union来进行联合查询：
+
+```sql
+select count(*) from (
+select * from employees e where e.birth_date between '1959-01-01' and '1960-06-30'
+union
+select * from employees e where e.birth_date between '1960-01-01' and '1963-01-01') u;
+```
+
+得到的结果为92572条数据，union查询对两个查询的结果集进行了去重操作。
+
+如果换用`union all` ，则查询结果为104164条，即`union all`不会对结果集进行去重。
+
+union联合查询可以用于分表后的多表查询。也可以将任意两个表的结果拼接在一起，只要两个sql返回的列数量和对应数据类型相同即可。
 
 
 ## 小结
