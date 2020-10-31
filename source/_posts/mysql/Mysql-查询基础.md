@@ -131,13 +131,13 @@ select * from employees e where e.emp_no in
 
 ## 关联查询Join
 
-还是与上一节一样的问题，用关联查询可以写作：
+还是与上一节一样的问题，用Join关联查询可以写作：
 
 ``` sql
 select e.* from employees e JOIN salaries s on e.emp_no = s.emp_no GROUP BY e.emp_no order by max(s.salary) DESC limit 10
 ```
 
-这种写法很类似联合查询的写法，实际上的执行效率也与联合查询相差无几。
+实际上，在Mysql中，使用`select * from a, b where a.id=b.id`的联合查询，其效果等价于`select * from a join b on a.id=b.id`，即内连接查询。
 
 好了好了，忘掉那个问题。
 
