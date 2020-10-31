@@ -16,7 +16,9 @@ tags:
 7.索引列避免使用函数，因为索引会失效
 8.不要写复杂sql,尽量单表查
 
-
+root
+pwd@dev_2018
+dev.yanyantech.com:3306/employees 数据库, employees表， first_name 字段
 ## 概述
 
 Mysql的查询优化工作是Mysql所有技术中最有用最为立竿见影的一项。通过合理的优化，往往可以令SQL查询的执行效率以数量级的方式提升。
@@ -136,6 +138,14 @@ explain select count(*) from salaries where salary between 40000 and 40200;
 
 ## 索引优化
 
+### Mysql的索引类型：
+
+- INDEX 普通索引
+- UNIQUE 唯一索引，索引列（列的组合）的值必须唯一或为空
+- PRIMARY 主键索引， 特殊的唯一索引，每个表只能有一个。
+- FULLTEXT 全文索引，需要配合match against语句来查询。类似于一个查询引擎。需文本可以分词。
+- SPATIAL 空间索引，对于空间数据类型建立的索引
+
 ### 简单索引案例：
 
 重看这个执行计划：
@@ -174,13 +184,103 @@ explain select count(*) from salaries where salary between 40000 and 40200;
 
 ### 字符串索引与模糊查询
 
+之前的查询都是关于数字、日期的格式化列的查询。在日常使用中，对于字符串列的查询也是很常见的，比如下面这个案例：
+
+```sql
+-- 查询所有first_name为Georgy的员工信息：
+
+SELECT * FROM employees.employees where first_name = "Georgy";
+```
+
+在未添加索引的情况下，这条查询的执行耗时为0.13s，现在为`first_name`字段增加一个索引：
+
+```sql
+ALTER TABLE `employees`.`employees` ADD INDEX `first_name` (`first_name` ASC);
+```
+
+其查询效率可以提升至0.02s以下，相比于增加索引之前有了数倍的提升。通过`Explain`查看执行计划可以看到利用了刚刚创建的索引，查询类型为`ref`。由此可见索引对于字符串列也同样有效。实际上我们甚至可以对字符串进行对比，比如下面这个查询也同样可以利用这个索引：
+
+```sql
+SELECT * FROM employees.employees where first_name between "Georga" and "Georgz";
+-- 这个查询同样利用了索引，查询类型为range。
+```
+
+但是我们修改一下查询条件，可能就有所不同了：
+
+```sql
+-- A: 
+SELECT * FROM employees.employees where first_name like "Georgy%";
+-- B: 
+SELECT * FROM employees.employees where first_name like "%Georgy";
+```
+
+这两个查询看似只有一个百分号的差别，但是A的执行速度为0.02s，而B的执行速度为0.15s。对比上面的例子可以很明显的猜到B的查询没有利用索引。通过`Explain`查看执行计划可以确认这一猜想：A的查询类型为`ref`，而B的查询类型为`ALL`。
+
+当我们使用模糊查询时，需要注意左侧的模糊查询不会利用到索引，其查询效率会低很多。
+
+```
+注意：在网上有很多博客说可以用LOCATE或者POSITION函数，或者用reverse之类的方法来利用索引，实际上这些方法在MYSQL 5.7中均不会生效！
+使用全文索引可以部分的解决问题，但是全文索引仅限于可以进行分词的文本，对不能分词的连续字符串模糊查询就很无力了。
+以目前作者所知，单纯依靠sql优化技术，没有任何方法可以完全功能的实现高效左侧模糊查询。只能通过业务逻辑来进行规避。诸如增加冗余列倒序存储等方式。
+```
+
 ### 组合索引与最左匹配原则
+
+### 其它的索引优化小技巧
+
+1. 应尽量避免在 where 子句中使用!=或<>操作符，否则将引擎放弃使用索引而进行全表扫描。
+2. 应尽量避免在 where 子句中对字段进行 null 值判断，否则将导致引擎放弃使用索引而进行全表扫描，如：
+select id from t where num is null
+可以在num上设置默认值0，确保表中num列没有null值，然后这样查询：
+select id from t where num=0
+3. 尽量避免在 where 子句中使用 or 来连接条件，否则将导致引擎放弃使用索引而进行全表扫描，如：
+```sql
+select id from t where num=10 or num=20;
+--可以这样查询：
+select id from t where num=10
+union all
+select id from t where num=20;
+```
+
+4. in 和 not in 也要慎用，否则会导致全表扫描，如：
+```sql
+select id from t where num in(1,2,3)
+-- 对于连续的数值，能用 between 就不要用 in 了：
+select id from t where num between 1 and 3
+```
+
+5. 如果在 where 子句中使用参数，也会导致全表扫描。因为SQL只有在运行时才会解析局部变量，但优化程序不能将访问计划的选择推迟到运行时；它必须在编译时进行选择。然 而，如果在编译时建立访问计划，变量的值还是未知的，因而无法作为索引选择的输入项。如下面语句将进行全表扫描：
+select id from t where num=@num
+可以改为强制查询使用索引：
+select id from t with(index(索引名)) where num=@num
+
+6. 不要在 where 子句中的“=”左边进行函数、算术运算或其他表达式运算，否则系统将可能无法正确使用索引。
+``` sql
+select id from t where substring(name,1,3)=’abc’; -- name以abc开头的id
+select id from t where datediff(day,createdate,’2005-11-30′)=0; -- ’2005-11-30′生成的id
+select id from t where num/2=100
+-- 应改为:
+select id from t where name like ‘abc%’
+select id from t where createdate>=’2005-11-30′ and createdate<’2005-12-1′
+select id from t where num=100*2
+```
+
+7. 很多时候用 exists 代替 in 是一个好的选择：
+```sql
+select num from a where num in(select num from b)
+-- 用下面的语句替换：
+select num from a where exists(select 1 from b where num=a.num)
+```
+
+8. 并不是所有索引对查询都有效，SQL是根据表中数据来进行查询优化的，当索引列有大量数据重复时，SQL查询可能不会去利用索引，如一表中有字段 sex，male、female几乎各一半，那么即使在sex上建了索引也对查询效率起不了作用。
+
+9. 索引并不是越多越好，索引固然可以提高相应的 select 的效率，但同时也降低了 insert 及 update 的效率，因为 insert 或 update 时有可能会重建索引，所以怎样建索引需要慎重考虑，视具体情况而定。一个表的索引数最好不要超过6个，若太多则应考虑一些不常使用到的列上建的索引是否有 必要。
 
 ---
 
 ## 关联表优化
 
-### 表的大小
+### 优化参与关联表的大小
 
 现在回到第一章中提出的一个问题：
 
