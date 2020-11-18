@@ -3,7 +3,7 @@
 ## Source: https://github.com/hexojs/hexo/
 
 # Site
-title: Aya的Blog
+title: Aya的技术笔记
 subtitle: ''
 description: ''
 keywords: Java 后端 技术 开发
@@ -13,7 +13,7 @@ timezone: ''
 
 # URL
 ## If your site is put in a subdirectory, set url as 'http://example.com/child' and root as '/child/'
-url: http://example.com
+url: http://shizhida.com
 root: /
 permalink: :title/
 permalink_defaults:
