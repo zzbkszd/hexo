@@ -330,12 +330,105 @@ AVL树有着很优秀的统计性能，在最坏的情况下也能保证O(logn)�
 
 `这玩意叫B树，不是B减树`
 
+B树与二叉树的最大区别，就在于B树是多路查找树，而二叉树只是二分查找。即B树的每个节点最多可以有N个子节点，这个子节点的数量N又被称为B树的“阶”，显然的，B树的阶越大，则树越矮。
+
+一个典型的三阶的B树如下图所示：
+
+![](btree-base.png)
+
+这棵树中有17个元素，如果用二叉树，这棵树的高度会有6层，而使用三阶B树，则只需要三层，随着数据量的增大，B树层级更低的特征会越发明显。
+
+### B树的构建
+
+之前二叉树的构建都是自顶向下的构建，首先构建一个根节点，然后逐层增加子节点。B树的构建则与之不同，是自底向上的构建。
+
+向B树中插入一个新节点，包括三个步骤：
+
+1、 查询应当插入的节点，代码如下：
+
+``` Java
+BNode node = root;
+while(node != null) {
+    int vs = node.values.size();
+    if(vs == 0) {
+        return node;
+    }
+    for(int i=0; i<node.values.size(); i++) {
+        int nv = node.values.get(i);
+        if (val < nv) {
+            // 判断是否属于子节点，若应该属于子节点且子节点不存在，说明应当插入当前节点
+            if(node.getChild(i) == null) {
+                return node;
+            }
+            node = node.getChild(i);
+            break;
+        } else if (i == vs-1 && val > nv) {
+            if(node.getChild(i+1) == null) {
+                return node;
+            }
+            node = node.getChild(i+1);
+            break;
+        }
+    }
+}
+```
+
+2、 在该节点的有序位置插入值，代码略
+
+3、 判断，若该节点的值数量>=树的阶数，则该节点需要分裂。并递归判断父节点
+
+``` Java
+// 出于省略，本部分为伪代码，不可直接执行
+private void splitAndPushup(BNode node) {
+    BNode parent = node.parent;
+    if(node.parent == null) {
+        root = new BNode(node.max);
+        parent = root;
+    }
+    int mid = node.max/2 // 推断中间值
+    BNode left = node.leftPart(); // 分裂后的左半部分
+    int pushValue = node.values.get(mid); // 需要推送到父节点的值
+    BNode right = node.rightPart();// 分裂后的右半部分
+
+    // 将左右节挂载到parent节点上
+    left.parent = parent;
+    right.parent = parent;
+    // 将值推送到父节点上，并将左右两个子节点对应插入在值的两侧
+    parent.insertValue(pushValue, left, right);
+    // 递归调用
+    if(parent.isFull()) {
+        splitAndPushup(parent);
+    }
+}
+```
+
+一个三阶B树分裂的过程如图所示：
+
+![](btree-split.png)
+
+### B+Tree
+
+在数据库索引的场景下，B树有两个问题：
+
+- 虽然有较好的查找性能，但是当我们需要依次遍历数据的时候，就比较麻烦了。
+- 数据与树结构混在一起。导致存储需要更多的磁盘空间。
+
+为了解决这个问题，B+树应运而生。B+树是对B树的一个演进，可以说是为了磁盘存取而特化的B树。B+树有两个特点：
+
+- 叶子节点之间使用链表的形式进行连接，可以很方便的顺序读取数据。
+- 非叶子节点只保存索引而不保存数据。每个磁盘页可以保存更多的索引信息
+
+与上面的B树案例对应，B+树的形式如下图所示
+
+![](b+tree.png)
+
+B+树的构建过程与B树类似，同样是自底向上的构建过程，但是有两点需要注意：
+
+1、 在分裂节点时，中间的索引同样要保留在子节点中，推到父节点中的数值是一个复制。因为在B+树中，子节点必须保留有整颗树中的全部索引信息。
+2、 在构建树的过程中需要同步维护一个叶子节点的链表结构，就是在每次插入时需要在对应的链表位置进行一次插入。
 
 
+## 小结
 
+查找树是非常实用和常见的一种结构，比如在数据库的存储应用的B+树，在Java中HashMap的数据存储应用的红黑树等。本文仅对常见的几种查找树进行了简单的介绍和实现。希望大家能够有所“建树”~
 
-
-
-
----
-未完待续......
