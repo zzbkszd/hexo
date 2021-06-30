@@ -15,7 +15,9 @@ CompletionStage接口从Java1.8开始引入，提供了多个Future之间的多�
 
 所以使用CompletableFuture，更准确的说，就是熟悉CompletionStage这个接口的各种用法。
 
-# 1、同步、异步与执行顺序
+<!-- more -->
+
+# 同步、异步与执行顺序
 
 要熟悉异步编程，首先需要分清的就是我们的程序究竟以什么样的顺序逻辑在执行。
 
@@ -166,7 +168,11 @@ public static void acceptAndAsync() {
 
 所以在编排任务时，一定要注意同步异步线程的耗时不同，否则会导致很多意外的执行结果。
 
-# 2、异步执行线程池
+```
+CompletableFuture有一个join()方法，可以把Future合并到当前线程进行同步执行。
+```
+
+# 异步执行线程池
 
 CompletableFuture执行异步任务，是通过线程池来执行的。实际上，CompletionStage接口所有的异步方法都有重载的两种形式：`xxxAsync(task)`和`xxxAsync(task, executor)`。后者即为指定执行异步任务的线程池。
 
@@ -214,7 +220,7 @@ task 4 at 4073
 
 要了解CompletionStage的任务编排方法，首先熟悉几个单词：`async,apply,accept,run,both,either`。任务编排的方法很多，但是其实熟悉了几个关键字之后是非常好记忆和使用的。
 
-首先异步任务的`async`在本篇一开始已经进行过了介绍，以async结尾的方法都会启动一个异步任务。
+首先异步任务的`async`在本篇一开始已经进行过了介绍，以async结尾的方法都会启动一个异步任务，所以本节不再重复。
 
 具体的编排方法大家可以直接去看CompletionStage接口的源码。相信看过本节之后，只看名字也能知道不同方法的编排方式。
 
@@ -229,9 +235,95 @@ task 4 at 4073
 - both ：两个Future全部执行完毕后执行后续逻辑。
 - either ：两个Futuer只要有一个执行完毕，就执行后续逻辑。
 
-下面我们用一些简单的伪代码来展示一下不同编排的效果：
+下面我们用一些简单的代码来展示一下不同编排的效果。首先来看一组简单的组合：
 
+```Java
+CompletableFuture.completedFuture("Hello") // 以常量构造一个CompletableFuture
+        .thenApply(h-> (h + " World"))     // 接收一个值，操作后返回另一个值
+        .thenAccept(System.out::println)   // 接收一个值并消费
+        .thenRun(()-> System.out.println("Other task")); // 不接受参数，也不返回参数，自顾自的做事情。
+```
 
+这个程序会输出以下内容：
 
+```
+Hello World
+Other task
+```
+
+以上案例是最常用的，CompletableFuture的线性组合。多个任务通过apply/accept/run方法就可以线性的串成一串顺序执行。
+
+后续的案例比较复杂，我们首先需要进行一下初始化工作，构造两个耗时的任务a和b：
+
+```Java
+ExecutorService executor = Executors.newFixedThreadPool(2);
+CompletableFuture<String> a = CompletableFuture.supplyAsync(()->{
+            try {
+                Thread.sleep(1000L);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            return "Hello";
+        },executor);
+CompletableFuture<String> b = CompletableFuture.supplyAsync(()->{
+            try {
+                Thread.sleep(1500L);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            return " World";
+        }, executor);
+```
+
+下面是涉及到多个任务的组合方式，具体功能就见注释吧：
+
+```Java
+// combine 只是组合，并不消费，相当于apply
+// 传入另一个Future b，接收的值是两个Future的返回值。最后返回一个新值。
+a.thenCombine(b, (f1,f2) -> "Combine " + f1+f2).thenAccept(System.out::println);
+
+// acceptBoth 同时接收两个并消费
+// 传入另一个Future b，接收的值是两个Future的返回值。并没有返回值。
+a.thenAcceptBoth(b, (f1,f2) -> System.out.println("accept both " + f1+f2));
+
+long start = System.currentTimeMillis();
+// afterBoth，等待a,b都执行完毕后执行，输出1500，因为b需要1500ms执行完毕
+a.runAfterBoth(b, ()-> System.out.println("after both cost:" + (System.currentTimeMillis()-start)));
+// afterEither， a,b中任意一个完成后执行，输出1000，因为a只需要1000ms就执行完毕了
+a.runAfterEither(b, ()-> System.out.println("after either cost:" + (System.currentTimeMillis()-start)));
+
+// applyToEither和thenCombine对应，acceptEither 和 thenAcceptBoth对应
+// 这里只举一个例子，apply(combine)和accept的语义没有改变。
+a.applyToEither(b, s->s + " Final").thenAccept(System.out::println).join();
+
+// 这两个的作用和上面的是差不多的，不过支持多个
+// 可以通过静态方法直接对多个Future进行处理。
+// allOf不能接收返回值，相当于增强的runAfterBoth的效果。
+CompletableFuture.allOf(a,b).thenRun(()-> System.out.println("all of cost:" + (System.currentTimeMillis()-start)));
+// anyOf可以接收一个返回值，相当于增强的acceptEither的效果
+CompletableFuture.anyOf(a,b).thenRun(()-> System.out.println("any of cost:" + (System.currentTimeMillis()-start)));
+
+// compose的语义和apply是接近的，不过compose是处理之后再返回另一个CompletableFuture，而不是返回一个值。
+a.thenCompose(s-> CompletableFuture.completedFuture(s + " World Compose")).thenAccept(System.out::println);
+
+// a先完成，就输出了Hello，相当于accept的结束处理，可以接收抛出的异常e
+a.whenComplete((s, e)-> System.out.println("when complete" + s));
+// 后续的任务继续执行，不影响a.whenComplete的输出
+a.thenCombine(b, (f1,f2) -> f1+f2).thenAccept(System.out::println);
+
+// 相当于apply的结束处理，可以接收抛出的异常e
+a.handle((s, e)-> "handle " + s).thenAccept(System.out::println);
+
+// 完成任务后关闭线程池。线程池会等待所有任务执行完毕后关闭，可以保证输出所有的内容
+executor.shutdown();
+```
+
+# 小结
+
+本章对CompletableFuture的使用进行了简要的阐述。
+
+CompletableFuture是Java异步编程中非常重要的特性，它大大简化了多个异步任务之间的调度和传参。掌握了CompletableFuture，就基本掌握了Java异步编程的八成。
+
+当然，其实更重要的，是异步编程中对于线程池的调度使用。盲目的使用异步编程而不能较好的调度线程池，往往会令最终效果适得其反。所以一定要夯实线程池的基础。
 
 
